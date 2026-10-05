@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'abrova_trace_flutter_sdk'
-  s.version          = '0.2.2'
+  s.version          = '0.2.5'
   s.summary          = 'AbrovaTrace Flutter plugin with real native crash capture'
   s.description      = <<-DESC
 AbrovaTrace error tracking and APM SDK for Flutter. Native iOS crashes
@@ -25,7 +25,7 @@ bridge from Dart to the native SDK.
   s.public_header_files = 'Classes/**/*.h'
 
   s.dependency 'Flutter'
-  s.dependency 'AbrovaTrace', '~> 0.2.0'
+  s.dependency 'AbrovaTrace', '~> 0.2.4'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5 - 2026-10-06
+
+- Uses native SDKs Android 0.2.3 and iOS 0.2.4: crashes on the Android main thread are reported, app launch on iOS never waits for a crash report, and crash reports are kept when the server or network fails.
+- Android: one hang is one ANR report, and no false ANR reports after a crash.
+- A report that is sent again is counted once: every error carries an `event_id` that stays the same on each attempt.
+- With `initWithZone()`, errors kept while offline are sent on the next start.
+- Minimum Android version is API 19.
+
 ## 0.2.2 - 2026-10-05
 
 First public release.
