@@ -1,0 +1,89 @@
+// Flutter plugin module: bridges Dart -> Android AbrovaTrace SDK.
+// The native SDK is now published to Maven Central and pulled as a
+// dependency. Only the Flutter MethodChannel bridge lives in this repo
+// (src/main/kotlin/ir/abrova/trace/sdk/flutter/).
+
+group 'ir.abrova.trace.sdk.flutter'
+version '0.2.0'
+
+buildscript {
+    ext.kotlin_version = '1.9.22'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    // Namespace must be ir.abrova.trace.sdk.flutter to match the plugin
+    // class package, and NOT the SDK's own namespace — the SDK is now a
+    // separate AAR and owns its own BuildConfig.
+    if (project.android.hasProperty("namespace")) {
+        namespace 'ir.abrova.trace.sdk.flutter'
+    }
+
+    compileSdk 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+        test.java.srcDirs += 'src/test/kotlin'
+    }
+
+    defaultConfig {
+        // Same floor as the standalone SDK — JVM crash handler runs on
+        // every API level; ApplicationExitInfo gates internally to API 30+.
+        minSdkVersion 16
+        targetSdkVersion 34
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    dependencies {
+        testImplementation 'org.jetbrains.kotlin:kotlin-test'
+        testImplementation 'org.mockito:mockito-core:5.0.0'
+    }
+
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                outputs.upToDateWhen { false }
+                showStandardStreams = true
+            }
+        }
+    }
+}
+
+dependencies {
+    // Published AbrovaTrace Android SDK. Transitively pulls androidx.core,
+    // okhttp, gson, lifecycle, work, and protobuf-javalite.
+    implementation 'ir.abrova.trace:abrova-trace-android-sdk:0.2.0'
+}

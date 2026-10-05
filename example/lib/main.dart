@@ -1,0 +1,734 @@
+// example/main.dart
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:abrova_trace_flutter_sdk/abrova_trace_flutter_sdk.dart';
+
+// Example-owned channel that talks to the native crash helper in
+// example/android/app. Kept out of the plugin so consumers of the SDK
+// don't inherit an NDK / JNI dependency.
+const MethodChannel _exampleCrashChannel =
+    MethodChannel('ir.abrova.trace.example/crash_helper');
+
+Future<void> _triggerExampleCrash(String kind) =>
+    _exampleCrashChannel.invokeMethod<void>('crashNative', {'kind': kind});
+
+void main() async {
+  // ========================================================================
+  // RECOMMENDED: Use initWithZone for comprehensive error catching
+  // This wraps the app in runZonedGuarded to catch async errors,
+  // and automatically handles crash detection on mobile platforms.
+  //
+  // IMPORTANT: Call initWithZone BEFORE WidgetsFlutterBinding.ensureInitialized()
+  // ========================================================================
+  await AbrovaTrace.initWithZone(
+    AbrovaTraceConfig(
+      apiKey: 'ab_live_your_api_key',
+      environment: 'development',
+      release: '0.1.0',
+      debug: true,
+      enabled: true,
+      captureUncaughtErrors: true,
+      // Sample rate: 1.0 = capture 100% of errors
+      // Set to 0.5 for 50%, 0.25 for 25%, etc.
+      sampleRate: 1.0,
+      // Offline storage: automatically stores errors when offline (mobile only)
+      enableOfflineStorage: true,
+      maxBreadcrumbs: 30,
+    ),
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // Set user ID for tracking
+      AbrovaTrace.setUserId('user123');
+
+      // Set global tags and extra context
+      AbrovaTrace.setTag('app_variant', 'full');
+      AbrovaTrace.setExtra('onboarding_completed', true);
+
+      // Enable logging
+      AbrovaTrace.enableLogging(
+        sourceId: 'flutter-demo-app',
+        sourceName: 'Flutter Demo App',
+      );
+
+      runApp(MyApp());
+    },
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AbrovaTrace SDK Demo',
+      navigatorObservers: [
+        // Add AbrovaTrace navigator observer for automatic breadcrumbs
+        AbrovaTraceNavigatorObserver(),
+      ],
+      home: HomePage(),
+      routes: {'/details': (context) => DetailsPage()},
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  String _status = 'Ready';
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Log app start
+    AbrovaTrace.info('Home page initialized');
+
+    // Send an info message
+    AbrovaTrace.captureMessage('User opened the app');
+  }
+
+  Future<void> _testErrorCapture() async {
+    setState(() => _status = 'Capturing error...');
+
+    try {
+      throw Exception('This is a test error for AbrovaTrace');
+    } catch (e, stackTrace) {
+      await AbrovaTrace.captureException(
+        e,
+        stackTrace: stackTrace,
+        message: 'User triggered test error',
+        extra: {'user_action': 'test_error_button'},
+      );
+
+      setState(() => _status = 'Error captured!');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error captured and sent to AbrovaTrace'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ========================================================================
+  // Intentional Crash - Test uncaught exception handling
+  // When using initWithZone, the zone catches this and sends it to AbrovaTrace.
+  // On next app launch, CrashDetector also detects the unclean exit.
+  // ========================================================================
+  void _testTriggerCrash() {
+    AbrovaTrace.addUserBreadcrumb('User triggered intentional crash');
+    AbrovaTrace.captureMessage(
+      'About to crash intentionally',
+      level: MessageLevel.warning,
+    );
+
+    // This throws outside a try/catch — the zone from initWithZone catches it
+    throw Exception('Intentional crash for testing AbrovaTrace');
+  }
+
+  // ========================================================================
+  // Native crash triggers — exercise the platform crash reporter.
+  // The app process dies immediately. On next launch, PLCrashReporter (iOS)
+  // or ApplicationExitInfo (Android, API 30+) drains the pending report and
+  // POSTs it to the backend. Nothing to do app-side other than relaunch.
+  // ========================================================================
+  Future<void> _testNativeCrashSignal() async {
+    AbrovaTrace.addUserBreadcrumb('User triggered native SIGSEGV');
+    await _triggerExampleCrash('signal');
+  }
+
+  Future<void> _testNativeCrashAbort() async {
+    AbrovaTrace.addUserBreadcrumb('User triggered native abort()');
+    await _triggerExampleCrash('abort');
+  }
+
+  Future<void> _testNativeAnr() async {
+    AbrovaTrace.addUserBreadcrumb('User triggered ANR (main thread block)');
+    await _triggerExampleCrash('anr');
+  }
+
+  Future<void> _testMessages() async {
+    setState(() => _status = 'Sending messages...');
+
+    // Info message
+    await AbrovaTrace.captureMessage('User completed onboarding');
+
+    // Warning message with extra data
+    await AbrovaTrace.captureMessage(
+      'API rate limit approaching',
+      level: MessageLevel.warning,
+      extra: {'remaining_calls': 10, 'limit': 100},
+    );
+
+    // Debug message without breadcrumbs
+    await AbrovaTrace.captureMessage(
+      'Cache hit for user data',
+      level: MessageLevel.debug,
+      includeBreadcrumbs: false,
+      extra: {'cache_key': 'user_profile'},
+    );
+
+    // Error level message
+    await AbrovaTrace.captureMessage(
+      'Payment processing failed',
+      level: MessageLevel.error,
+      extra: {'transaction_id': 'tx_12345', 'amount': 99.99},
+    );
+
+    setState(() => _status = 'Messages sent!');
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('4 messages sent to AbrovaTrace')));
+    }
+  }
+
+  Future<void> _testLogging() async {
+    setState(() => _status = 'Sending logs...');
+
+    AbrovaTrace.trace('Entering checkout flow');
+    AbrovaTrace.debug('Cart items loaded', metadata: {'item_count': 3});
+    AbrovaTrace.info('User started checkout');
+    AbrovaTrace.warn('Inventory low for item SKU-123', metadata: {'stock': 2});
+    AbrovaTrace.logError('Failed to apply discount code');
+    AbrovaTrace.fatal('Database connection lost');
+
+    // Flush logs immediately
+    await AbrovaTrace.flushLogs();
+
+    setState(
+      () => _status = 'Logs sent! (${AbrovaTrace.pendingLogCount} pending)',
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('6 logs sent to AbrovaTrace')));
+    }
+  }
+
+  Future<void> _testPerformance() async {
+    setState(() => _status = 'Tracking performance...');
+
+    // Track an async operation
+    final result = await AbrovaTrace.trackOperation(
+      'simulateApiCall',
+      () async {
+        await Future.delayed(Duration(milliseconds: 350));
+        return 'success';
+      },
+    );
+
+    // Report a manual performance span
+    await AbrovaTrace.reportPerformanceSpan(
+      PerformanceSpan.fromHttpRequest(
+        method: 'GET',
+        url: 'https://api.example.com/users',
+        startTime: DateTime.now().subtract(Duration(milliseconds: 200)),
+        durationMs: 200,
+        statusCode: 200,
+        platform: AbrovaTrace.getPlatform(),
+        environment: 'production',
+        releaseVersion: '0.1.0',
+      ),
+    );
+
+    // Report a DB query span
+    await AbrovaTrace.reportPerformanceSpan(
+      PerformanceSpan.forDbQuery(
+        queryType: 'SELECT',
+        tableName: 'users',
+        startTime: DateTime.now().subtract(Duration(milliseconds: 15)),
+        durationMs: 15,
+        rowsAffected: 1,
+        platform: AbrovaTrace.getPlatform(),
+        environment: 'production',
+      ),
+    );
+
+    setState(() => _status = 'Performance tracked! Result: $result');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Performance spans sent to AbrovaTrace')),
+      );
+    }
+  }
+
+  // ========================================================================
+  // Performance HTTP Client - Automatic HTTP request tracking
+  // Wraps an http.Client to automatically capture performance spans
+  // for every HTTP request made through it.
+  // ========================================================================
+  Future<void> _testPerformanceHttpClient() async {
+    setState(() => _status = 'Testing PerformanceHttpClient...');
+
+    // Create a performance-tracking HTTP client via the SDK factory
+    final client = AbrovaTrace.createPerformanceClient(
+      addBreadcrumbs: true,
+      // Optionally exclude hosts you don't want tracked
+      excludedHosts: {'internal-service.local'},
+      // Only report requests slower than 10ms
+      minDurationMs: 10,
+    );
+
+    try {
+      // Every request through this client is automatically tracked as a
+      // performance span and sent to AbrovaTrace — no manual span creation needed
+      final response = await client.get(
+        Uri.parse('https://jsonplaceholder.typicode.com/posts/1'),
+      );
+
+      // Make a second request to demonstrate batch span reporting
+      final response2 = await client.get(
+        Uri.parse('https://jsonplaceholder.typicode.com/users/1'),
+      );
+
+      // Force flush any buffered spans
+      await client.flush();
+
+      setState(
+        () => _status =
+            'PerformanceHttpClient done! Status: ${response.statusCode}, ${response2.statusCode}',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('2 HTTP requests auto-tracked as performance spans'),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _status = 'HTTP request failed: $e');
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> _testBreadcrumbs() async {
+    setState(() => _status = 'Adding breadcrumbs...');
+
+    // Add various breadcrumb types
+    AbrovaTrace.addBreadcrumb('App initialized', type: BreadcrumbType.system);
+    AbrovaTrace.addUserBreadcrumb('Tapped breadcrumb button');
+    AbrovaTrace.addHttpBreadcrumb(
+      'GET',
+      'https://api.example.com/data',
+      statusCode: 200,
+      durationMs: 150,
+    );
+    AbrovaTraceBreadcrumbs.addState(
+      'theme_changed',
+      data: {'from': 'light', 'to': 'dark'},
+    );
+
+    // Send a message with the breadcrumbs attached so they reach the backend
+    await AbrovaTrace.captureMessage(
+      'Breadcrumb test - 4 breadcrumbs recorded',
+      level: MessageLevel.info,
+      extra: {'breadcrumb_count': 4, 'test_type': 'breadcrumbs'},
+    );
+
+    setState(() => _status = 'Breadcrumbs added and sent!');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('4 breadcrumbs added and sent to AbrovaTrace')),
+      );
+    }
+  }
+
+  // ========================================================================
+  // Crash Detection — 2.0.0 note
+  // Native crashes are now captured by PLCrashReporter (iOS) and
+  // ApplicationExitInfo (Android, API 30+) and automatically posted on
+  // the next launch. There is no manual check API anymore — there is
+  // nothing for the app to do beyond calling AbrovaTrace.initWithZone(...).
+  // ========================================================================
+  Future<void> _testCrashDetection() async {
+    setState(
+      () => _status =
+          'Native crashes are auto-reported on next launch (no manual check).',
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Native crashes are captured automatically by the native plugin.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ========================================================================
+  // Offline Storage - Store errors locally when offline, retry on reconnect
+  // Enabled via enableOfflineStorage: true in AbrovaTraceConfig (default).
+  // Mobile only — web platform is excluded.
+  // ========================================================================
+  Future<void> _testOfflineStorage() async {
+    setState(() => _status = 'Checking offline storage...');
+
+    final hasStored = await OfflineStorageService.hasStoredErrors();
+    final storedCount = await OfflineStorageService.getStoredErrorCount();
+
+    if (hasStored) {
+      // Retrieve and display stored errors
+      final storedErrors = await OfflineStorageService.getStoredErrors();
+
+      setState(
+        () => _status =
+            'Offline storage: $storedCount errors stored\n'
+            'First stored: ${storedErrors.first['message'] ?? 'unknown'}',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$storedCount offline errors found — SDK will auto-retry sending',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } else {
+      // Demonstrate how offline storage works:
+      // When the SDK fails to send an error (no network), it automatically
+      // stores it locally. On next app launch, stored errors are retried.
+      setState(
+        () => _status =
+            'Offline storage: 0 errors stored\n'
+            'Errors are auto-stored when network is unavailable (mobile only)',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No offline errors stored — errors queue automatically when offline',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // ========================================================================
+  // Sample Rate Demo - Show how sampleRate affects error capture
+  // ========================================================================
+  Future<void> _testSampleRate() async {
+    setState(() => _status = 'Testing sample rate...');
+
+    // The sample rate is configured at init time (see main()).
+    // With sampleRate: 1.0, all errors are captured.
+    // With sampleRate: 0.5, ~50% of errors are randomly dropped.
+    //
+    // To demonstrate, we send 10 errors and check how many are actually sent.
+    // With sampleRate: 1.0 (current config), all 10 should be sent.
+    // If you change to sampleRate: 0.5, roughly 5 of 10 will be sent.
+
+    int sentCount = 0;
+
+    for (int i = 0; i < 10; i++) {
+      try {
+        throw Exception('Sample rate test error #$i');
+      } catch (e, stackTrace) {
+        await AbrovaTrace.captureException(
+          e,
+          stackTrace: stackTrace,
+          message: 'Sample rate test',
+          extra: {'error_index': i, 'total_errors': 10},
+          callback: (success) {
+            if (success) sentCount++;
+          },
+        );
+      }
+    }
+
+    // Small delay to let callbacks complete
+    await Future.delayed(Duration(milliseconds: 500));
+
+    setState(
+      () => _status =
+          'Sample rate test: $sentCount/10 errors sent\n'
+          'Current rate: 1.0 (100%)',
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$sentCount of 10 errors captured (sampleRate: 1.0)'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('AbrovaTrace SDK Demo')),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Status card
+            Card(
+              color: Colors.blue[50],
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Text(
+                      'SDK Status',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text('Initialized: ${AbrovaTrace.isInitialized()}'),
+                    Text('Platform: ${AbrovaTrace.getPlatform() ?? "unknown"}'),
+                    Text('User: ${AbrovaTrace.getUserId() ?? "not set"}'),
+                    Text(
+                      'Session: ${AbrovaTrace.getSessionId()?.substring(0, 8) ?? "none"}...',
+                    ),
+                    SizedBox(height: 8),
+                    Text(_status, style: TextStyle(color: Colors.grey[600])),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Feature buttons
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildSectionHeader('Core Features'),
+                  _buildFeatureButton(
+                    'Capture Error',
+                    'Test exception capture with stack trace',
+                    Icons.error,
+                    Colors.red,
+                    _testErrorCapture,
+                  ),
+                  _buildFeatureButton(
+                    'Trigger Crash',
+                    'Throw uncaught exception (will crash app!)',
+                    Icons.dangerous,
+                    Colors.red[900]!,
+                    _testTriggerCrash,
+                  ),
+                  _buildFeatureButton(
+                    'Send Messages',
+                    'Send info, warning, debug, and error messages',
+                    Icons.message,
+                    Colors.blue,
+                    _testMessages,
+                  ),
+                  _buildFeatureButton(
+                    'Send Logs',
+                    'Send trace, debug, info, warn, error, fatal logs',
+                    Icons.list_alt,
+                    Colors.green,
+                    _testLogging,
+                  ),
+                  _buildFeatureButton(
+                    'Track Performance',
+                    'Send HTTP and DB performance spans (manual)',
+                    Icons.speed,
+                    Colors.orange,
+                    _testPerformance,
+                  ),
+                  _buildFeatureButton(
+                    'Add Breadcrumbs',
+                    'Add system, user, HTTP, and state breadcrumbs',
+                    Icons.timeline,
+                    Colors.purple,
+                    _testBreadcrumbs,
+                  ),
+                  _buildFeatureButton(
+                    'Navigate',
+                    'Go to details page (sends navigation breadcrumb)',
+                    Icons.navigate_next,
+                    Colors.teal,
+                    () async {
+                      await AbrovaTrace.captureMessage(
+                        'User navigating to details page',
+                        level: MessageLevel.info,
+                        extra: {'from': 'HomePage', 'to': 'DetailsPage'},
+                      );
+                      if (context.mounted) {
+                        Navigator.pushNamed(context, '/details');
+                      }
+                    },
+                  ),
+
+                  SizedBox(height: 12),
+                  _buildSectionHeader('Advanced Features'),
+                  _buildFeatureButton(
+                    'Performance HTTP Client',
+                    'Auto-track HTTP requests as performance spans',
+                    Icons.http,
+                    Colors.deepOrange,
+                    _testPerformanceHttpClient,
+                  ),
+                  _buildFeatureButton(
+                    'Crash Detection',
+                    'Check if previous session crashed (mobile only)',
+                    Icons.warning_amber,
+                    Colors.amber[800]!,
+                    _testCrashDetection,
+                  ),
+                  _buildFeatureButton(
+                    'Offline Storage',
+                    'View locally stored errors for offline retry (mobile only)',
+                    Icons.cloud_off,
+                    Colors.grey[700]!,
+                    _testOfflineStorage,
+                  ),
+                  _buildFeatureButton(
+                    'Sample Rate',
+                    'Send 10 errors to demonstrate sample rate filtering',
+                    Icons.tune,
+                    Colors.indigo,
+                    _testSampleRate,
+                  ),
+
+                  SizedBox(height: 12),
+                  _buildSectionHeader('Native Crash Tests (kills app)'),
+                  _buildFeatureButton(
+                    'Native Crash (SIGSEGV)',
+                    'Null-deref on native side. Report arrives on next launch.',
+                    Icons.bug_report,
+                    Colors.red[900]!,
+                    _testNativeCrashSignal,
+                  ),
+                  _buildFeatureButton(
+                    'Native Crash (abort)',
+                    'Call abort() natively. Report arrives on next launch.',
+                    Icons.stop_circle,
+                    Colors.red[900]!,
+                    _testNativeCrashAbort,
+                  ),
+                  if (!kIsWeb && Platform.isAndroid)
+                    _buildFeatureButton(
+                      'ANR (Android)',
+                      'Blocks main thread 15s. ApplicationExitInfo records it.',
+                      Icons.hourglass_disabled,
+                      Colors.amber[900]!,
+                      _testNativeAnr,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8, top: 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[600],
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureButton(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+  ) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle),
+        trailing: Icon(Icons.chevron_right),
+        onTap: onPressed,
+      ),
+    );
+  }
+}
+
+class DetailsPage extends StatefulWidget {
+  const DetailsPage({super.key});
+
+  @override
+  State<DetailsPage> createState() => _DetailsPageState();
+}
+
+class _DetailsPageState extends State<DetailsPage> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Log and send page view
+    AbrovaTrace.info('Details page viewed');
+    AbrovaTrace.captureMessage(
+      'Details page viewed',
+      level: MessageLevel.info,
+      extra: {
+        'current_route': AbrovaTraceNavigatorObserver.currentRoute ?? 'unknown',
+        'previous_route': AbrovaTraceNavigatorObserver.previousRoute ?? 'none',
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Details Page')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Navigation breadcrumb was automatically recorded!'),
+            SizedBox(height: 16),
+            Text(
+              'Current route: ${AbrovaTraceNavigatorObserver.currentRoute ?? "unknown"}',
+            ),
+            Text(
+              'Previous route: ${AbrovaTraceNavigatorObserver.previousRoute ?? "none"}',
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () async {
+                await AbrovaTrace.captureMessage(
+                  'User navigating back from details page',
+                  level: MessageLevel.info,
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
