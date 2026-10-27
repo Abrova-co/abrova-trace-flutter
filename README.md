@@ -11,35 +11,17 @@ Flutter plugin for Abrova Trace: it reports Dart errors, native Android and iOS 
 
 ## Install
 
-1. Add the package to `pubspec.yaml`:
+Add the package to `pubspec.yaml`:
 
 ```yaml
 # pubspec.yaml
 dependencies:
   abrova_trace_flutter_sdk:
     hosted: https://center.abrova.ir/api/packages/abrova/pub
-    version: ^0.2.5
+    version: ^0.2.6
 ```
 
-2. Android: the plugin uses the native Android SDK. Add the repository in `android/build.gradle` (or `android/settings.gradle`, wherever your project lists repositories):
-
-```groovy
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url "https://center.abrova.ir/api/packages/abrova/maven" }
-    }
-}
-```
-
-3. iOS: the plugin uses the native iOS SDK. Add this inside the app target in `ios/Podfile`:
-
-```ruby
-pod 'AbrovaTrace', :git => 'https://github.com/Abrova-co/abrova-trace-ios-sdk.git', :tag => '0.2.4'
-```
-
-Then run `flutter pub get`.
+Then run `flutter pub get`. Nothing else is needed: the native Android and iOS SDKs come with the plugin.
 
 ## Quick start
 

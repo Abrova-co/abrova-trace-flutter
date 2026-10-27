@@ -196,10 +196,8 @@ class AbrovaTrace {
     // Configure breadcrumbs max limit
     AbrovaTraceBreadcrumbs.setMaxBreadcrumbs(_config.maxBreadcrumbs);
 
-    // Initialize offline storage if enabled
-    if (_config.enableOfflineStorage && !kIsWeb) {
-      await OfflineStorageService.initialize();
-    }
+    // Offline storage is not touched here: it needs the Flutter binding, which the app's own code sets up inside
+    // the zone. initWithZone sets it up after the app has started (and it sets itself up on first use before that).
 
     // Set up automatic error catching
     if (_config.captureUncaughtErrors) {

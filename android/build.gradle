@@ -4,7 +4,7 @@
 // (src/main/kotlin/ir/abrova/trace/sdk/flutter/).
 
 group 'ir.abrova.trace.sdk.flutter'
-version '0.2.5'
+version '0.2.6'
 
 buildscript {
     ext.kotlin_version = '1.9.22'
@@ -23,6 +23,8 @@ rootProject.allprojects {
     repositories {
         google()
         mavenCentral()
+        // The native Abrova Trace SDK is published on Abrova Center.
+        maven { url "https://center.abrova.ir/api/packages/abrova/maven" }
     }
 }
 

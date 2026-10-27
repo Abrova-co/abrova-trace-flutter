@@ -1,6 +1,6 @@
 name: abrova_trace_flutter_sdk
 description: "Flutter plugin for AbrovaTrace error tracking with real native crash capture on iOS (PLCrashReporter) and Android (ApplicationExitInfo)."
-version: 0.2.5
+version: 0.2.6
 homepage: https://abrova.ir/cloud/abrova-trace
 repository: https://github.com/Abrova-co/abrova-trace-flutter
 documentation: https://abrova.ir/cloud/abrova-trace

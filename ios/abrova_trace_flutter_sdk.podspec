@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'abrova_trace_flutter_sdk'
-  s.version          = '0.2.5'
+  s.version          = '0.2.6'
   s.summary          = 'AbrovaTrace Flutter plugin with real native crash capture'
   s.description      = <<-DESC
 AbrovaTrace error tracking and APM SDK for Flutter. Native iOS crashes

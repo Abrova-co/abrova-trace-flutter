@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 - 2026-10-27
+
+- Installs with the `pubspec.yaml` line only. Android and iOS need no setup: remove the Abrova Maven repository from `android/build.gradle` and the `AbrovaTrace` line from `ios/Podfile` if you added them for an earlier version.
+- Fix: `initWithZone()` no longer prints "Failed to initialize offline storage: Binding has not yet been initialized" at start. Offline storage now sets itself up once the app has started.
+- Fix: errors stored offline at the same moment are all kept (before, one could be lost).
+
 ## 0.2.5 - 2026-10-06
 
 - Uses native SDKs Android 0.2.3 and iOS 0.2.4: crashes on the Android main thread are reported, app launch on iOS never waits for a crash report, and crash reports are kept when the server or network fails.
