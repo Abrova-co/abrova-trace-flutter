@@ -4,7 +4,7 @@
 // (src/main/kotlin/ir/abrova/trace/sdk/flutter/).
 
 group 'ir.abrova.trace.sdk.flutter'
-version '0.2.6'
+version '0.2.7'
 
 buildscript {
     ext.kotlin_version = '1.9.22'
@@ -87,5 +87,5 @@ android {
 dependencies {
     // Published AbrovaTrace Android SDK. Transitively pulls androidx.core,
     // okhttp, gson, lifecycle, work, and protobuf-javalite.
-    implementation 'ir.abrova.trace:abrova-trace-android-sdk:0.2.3'
+    implementation 'ir.abrova.trace:abrova-trace-android-sdk:0.2.4'
 }

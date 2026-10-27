@@ -18,7 +18,7 @@ Add the package to `pubspec.yaml`:
 dependencies:
   abrova_trace_flutter_sdk:
     hosted: https://center.abrova.ir/api/packages/abrova/pub
-    version: ^0.2.6
+    version: ^0.2.7
 ```
 
 Then run `flutter pub get`. Nothing else is needed: the native Android and iOS SDKs come with the plugin.

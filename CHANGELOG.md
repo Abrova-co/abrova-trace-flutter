@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7 - 2026-10-28
+
+- Uses native SDKs Android 0.2.4 and iOS 0.2.5: a native abort on Android is reported once (before, it could also arrive a second time as a JVM crash), and one hang on iOS is one ANR report (before, one was sent every few seconds while the app stayed frozen).
+
 ## 0.2.6 - 2026-10-27
 
 - Installs with the `pubspec.yaml` line only. Android and iOS need no setup: remove the Abrova Maven repository from `android/build.gradle` and the `AbrovaTrace` line from `ios/Podfile` if you added them for an earlier version.
