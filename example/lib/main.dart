@@ -24,7 +24,10 @@ void main() async {
   // ========================================================================
   await AbrovaTrace.initWithZone(
     AbrovaTraceConfig(
-      apiKey: 'ab_live_your_api_key',
+      // Optional build values: --dart-define=ABROVA_TRACE_API_KEY=ab_live_...
+      // and --dart-define=ABROVA_TRACE_API_URL=... (another Trace server, for example one you run yourself).
+      apiKey: const String.fromEnvironment('ABROVA_TRACE_API_KEY', defaultValue: 'ab_live_your_api_key'),
+      apiUrl: const String.fromEnvironment('ABROVA_TRACE_API_URL').isEmpty ? null : const String.fromEnvironment('ABROVA_TRACE_API_URL'),
       environment: 'development',
       release: '0.1.0',
       debug: true,
