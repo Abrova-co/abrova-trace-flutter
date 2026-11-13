@@ -71,6 +71,18 @@ class AbrovaTraceNativePlugin {
     }
   }
 
+  /// Whether the app's process ended in a native crash after [sinceMs] (ms since epoch): Android 11+ from the
+  /// process exit reasons, iOS from a crash report of the previous run. False when unknown (older Android, web, an
+  /// older native side).
+  static Future<bool> lastExitCrashed(int sinceMs) async {
+    if (!_supported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('lastExitCrashed', <String, Object?>{'sinceMs': sinceMs}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> setUserId(String? userId) async {
     if (!_supported) return;
     try {

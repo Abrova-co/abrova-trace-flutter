@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-11-14
+
+- Release health: the SDK reports one session per app launch (and a new one after 30 minutes in the background), and
+  reports it as crashed after an uncaught error or a native crash (Android 11+ and iOS, at the next launch). Abrova
+  Trace shows crash-free sessions and users per release. On by default; `enableReleaseHealth: false` turns it off.
+  Sessions are free. Only a random install id made on the device is sent, never a device id.
+- Errors now name the session they happened in (`session_id`), the same one release health reports.
+
 ## 0.2.8 - 2026-10-30
 
 - iOS: Swift Package Manager support. Flutter apps with Swift Package Manager on (the default in current Flutter) get the native iOS SDK from Abrova Center through it; apps on CocoaPods work as before.

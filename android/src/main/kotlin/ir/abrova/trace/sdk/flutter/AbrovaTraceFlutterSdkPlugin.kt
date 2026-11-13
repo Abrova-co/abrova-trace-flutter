@@ -1,6 +1,9 @@
 package ir.abrova.trace.sdk.flutter
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
+import android.os.Build
 import ir.abrova.trace.sdk.AbrovaTrace
 import ir.abrova.trace.sdk.AbrovaTraceConfig
 import ir.abrova.trace.sdk.models.BreadcrumbType
@@ -32,6 +35,7 @@ class AbrovaTraceFlutterSdkPlugin : FlutterPlugin, MethodChannel.MethodCallHandl
         when (call.method) {
             "init" -> handleInit(call, result)
             "drainPendingCrashReports" -> result.success(emptyList<Map<String, Any?>>())
+            "lastExitCrashed" -> result.success(lastExitCrashed(call.argument<Number>("sinceMs")?.toLong() ?: 0L))
             "setUserId" -> handleSetUserId(call, result)
             "addBreadcrumb" -> handleAddBreadcrumb(call, result)
             "captureException" -> handleCaptureException(call, result)
@@ -40,6 +44,24 @@ class AbrovaTraceFlutterSdkPlugin : FlutterPlugin, MethodChannel.MethodCallHandl
                 result.success(null)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    /**
+     * Release health: whether the app's main process last ended in a crash (Java or native) after [sinceMs].
+     * Android 11+ keeps the exit reasons; older versions answer false. An ANR or a kill by the system is not a crash.
+     */
+    private fun lastExitCrashed(sinceMs: Long): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        return try {
+            val am = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val last = am.getHistoricalProcessExitReasons(applicationContext.packageName, 0, 10)
+                .filter { it.processName == applicationContext.packageName }
+                .maxByOrNull { it.timestamp } ?: return false
+            last.timestamp >= sinceMs &&
+                (last.reason == ApplicationExitInfo.REASON_CRASH || last.reason == ApplicationExitInfo.REASON_CRASH_NATIVE)
+        } catch (e: Exception) {
+            false
         }
     }
 

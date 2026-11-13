@@ -50,6 +50,12 @@ class AbrovaTraceConfig {
   /// build mode are still sent).
   final bool collectDeviceInfo;
 
+  /// Release health (default: true): one small session report per app launch, and again when the session crashed,
+  /// so Abrova Trace shows crash-free sessions and users per release. A new session starts after 30 minutes in the
+  /// background. Sends a random install id made on the device (never a device id), a random session id, the start
+  /// time, [release], [environment], the platform and the user id set with `setUserId`. Free.
+  final bool enableReleaseHealth;
+
   /// Custom log handler to receive SDK logs
   ///
   /// Use this to forward logs to your own logging system or display them
@@ -80,6 +86,7 @@ class AbrovaTraceConfig {
     this.sampleRate = 1.0,
     this.enableOfflineStorage = true,
     this.collectDeviceInfo = true,
+    this.enableReleaseHealth = true,
     this.logHandler,
   }) : apiUrl = apiUrl ?? AbrovaTraceConstants.apiUrl;
 
@@ -102,6 +109,7 @@ class AbrovaTraceConfig {
     double? sampleRate,
     bool? enableOfflineStorage,
     bool? collectDeviceInfo,
+    bool? enableReleaseHealth,
     AbrovaTraceLogCallback? logHandler,
   }) {
     return AbrovaTraceConfig(
@@ -118,6 +126,7 @@ class AbrovaTraceConfig {
       sampleRate: sampleRate ?? this.sampleRate,
       enableOfflineStorage: enableOfflineStorage ?? this.enableOfflineStorage,
       collectDeviceInfo: collectDeviceInfo ?? this.collectDeviceInfo,
+      enableReleaseHealth: enableReleaseHealth ?? this.enableReleaseHealth,
       logHandler: logHandler ?? this.logHandler,
     );
   }

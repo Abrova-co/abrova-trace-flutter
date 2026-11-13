@@ -18,7 +18,7 @@ Add the package to `pubspec.yaml`:
 dependencies:
   abrova_trace_flutter_sdk:
     hosted: https://center.abrova.ir/api/packages/abrova/pub
-    version: ^0.2.8
+    version: ^0.3.0
 ```
 
 Then run `flutter pub get`. Nothing else is needed: the native Android and iOS SDKs come with the plugin.
@@ -104,6 +104,16 @@ final response = await client.get(Uri.parse('https://api.example.com/data'));
 final profile = await AbrovaTrace.trackOperation('fetchUserProfile', () => api.fetchProfile());
 ```
 
+## Release health
+
+The SDK reports one session per app launch, and a new one after 30 minutes in the background. A session that ends
+in a crash is reported as crashed: an uncaught error at once, a native crash at the next launch. Abrova Trace then
+shows crash-free sessions and crash-free users for each `release`, so set `release` to your app's version.
+
+It sends a random install id made on the device (never a device id), a random session id, the start time, the
+release, the environment, the platform and the user id set with `setUserId`. Sessions are free. Turn it off with
+`enableReleaseHealth: false`.
+
 ## Configuration
 
 Options of `AbrovaTraceConfig`:
@@ -119,6 +129,7 @@ Options of `AbrovaTraceConfig`:
 | `maxBreadcrumbs` | `20` | Number of breadcrumbs kept |
 | `enableOfflineStorage` | `true` | Store errors while offline and send them later (Android and iOS) |
 | `collectDeviceInfo` | `true` | Attach device, OS and app details to events |
+| `enableReleaseHealth` | `true` | Report sessions, so Abrova Trace shows crash-free sessions and users per release |
 | `timeout` | `30` | Request timeout in seconds |
 | `debug` | `false` | Print SDK debug logs |
 | `apiUrl` | `https://trace.abrova.ir` | Abrova Trace API address |

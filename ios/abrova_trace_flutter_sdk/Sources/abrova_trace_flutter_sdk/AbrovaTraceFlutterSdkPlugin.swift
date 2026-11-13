@@ -21,6 +21,9 @@ public class AbrovaTraceFlutterSdkPlugin: NSObject, FlutterPlugin {
             handleInit(call.arguments as? [String: Any] ?? [:], result: result)
         case "drainPendingCrashReports":
             handleDrainPendingCrashReports(result: result)
+        case "lastExitCrashed":
+            let since = ((call.arguments as? [String: Any])?["sinceMs"] as? NSNumber)?.doubleValue ?? 0
+            result(Self.lastExitCrashed(sinceMs: since))
         case "setUserId":
             handleSetUserId(call.arguments as? [String: Any] ?? [:], result: result)
         case "addBreadcrumb":
@@ -35,9 +38,40 @@ public class AbrovaTraceFlutterSdkPlugin: NSObject, FlutterPlugin {
         }
     }
 
+    // MARK: - release health
+
+    /// When the previous run left a native crash report (PLCrashReporter writes it at the crash), read once before
+    /// the iOS SDK starts: the SDK sends the report and then deletes it.
+    private static var previousCrashAt: Date?
+    private static var checkedPreviousCrash = false
+
+    private static func notePreviousCrash() {
+        guard !checkedPreviousCrash else { return }
+        checkedPreviousCrash = true
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let root = caches.appendingPathComponent("com.plausiblelabs.crashreporter.data", isDirectory: true)
+        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        for folder in folders {
+            let report = folder.appendingPathComponent("live_report.plcrash")
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: report.path),
+               let date = attrs[.modificationDate] as? Date,
+               previousCrashAt == nil || date > previousCrashAt! {
+                previousCrashAt = date
+            }
+        }
+    }
+
+    /// Release health: whether the previous run ended in a native crash after `sinceMs` (ms since 1970).
+    static func lastExitCrashed(sinceMs: Double) -> Bool {
+        notePreviousCrash()
+        guard let at = previousCrashAt else { return false }
+        return at.timeIntervalSince1970 * 1000 >= sinceMs
+    }
+
     // MARK: - init
 
     private func handleInit(_ args: [String: Any], result: @escaping FlutterResult) {
+        Self.notePreviousCrash()
         guard let apiKey = args["apiKey"] as? String, !apiKey.isEmpty else {
             result(FlutterError(code: "invalid_args", message: "apiKey required", details: nil))
             return

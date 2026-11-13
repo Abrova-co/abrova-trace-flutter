@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 import 'package:http/http.dart' as http;
 import 'package:abrova_trace_flutter_sdk/abrova_trace_flutter_sdk.dart';
 
@@ -13,6 +14,7 @@ import 'src/platform/abrova_trace_native_plugin.dart';
 import 'src/constants/abrova_trace_constants.dart';
 import 'src/services/abrova_trace_logger.dart';
 import 'src/services/device_context_service.dart';
+import 'src/services/session/release_health.dart';
 // Log service is imported via export above
 
 export 'src/models/abrova_trace_error.dart';
@@ -60,6 +62,13 @@ class AbrovaTrace {
   // Log service for app logging
   LogService? _logService;
 
+  // Release health: sessions and crashes per release (null when off or before start)
+  ReleaseHealth? _releaseHealth;
+  _ReleaseHealthLifecycle? _lifecycle;
+
+  /// The release-health session id when it runs (so errors name the session they happened in), else this run's id.
+  String get _currentSessionId => _releaseHealth?.sessionId ?? _sessionId;
+
   // Random instance for sample rate
   static final Random _random = Random();
 
@@ -105,6 +114,7 @@ class AbrovaTrace {
           await AbrovaTraceNativePlugin.init(_instance!._config);
           await _instance!._drainNativeCrashesFromPreviousSession();
         }
+        await _instance!._startReleaseHealth();
 
         // Offline storage needs the binding too (it asks the platform for a
         // folder), so it is set up here, and errors kept from an earlier
@@ -115,7 +125,8 @@ class AbrovaTrace {
         }
       },
       (error, stackTrace) {
-        // Catch async errors that aren't caught by Flutter's error handler
+        // Catch async errors that aren't caught by Flutter's error handler. An uncaught error crashes the session.
+        unawaited(_instance?._releaseHealth?.markCrashed());
         captureException(
           error,
           stackTrace: stackTrace,
@@ -162,6 +173,7 @@ class AbrovaTrace {
     }
 
     _isInitialized = true;
+    await _startReleaseHealth();
 
     // Add system breadcrumb
     AbrovaTraceBreadcrumbs.addSystem(
@@ -241,6 +253,31 @@ class AbrovaTrace {
     }
   }
 
+  /// Starts release health (one session per launch, see [AbrovaTraceConfig.enableReleaseHealth]). Needs the Flutter
+  /// binding, which both init paths have here. Never throws.
+  Future<void> _startReleaseHealth() async {
+    if (!_config.enabled || !_config.enableReleaseHealth || _releaseHealth != null) return;
+    try {
+      final health = ReleaseHealth(
+        apiUrl: _config.apiUrl,
+        apiKey: _config.apiKey,
+        platform: _platformHandler.getPlatform(),
+        environment: _config.environment,
+        release: _config.release,
+        userAgent: _platformHandler.getUserAgent(_config.release),
+        userId: () => _userId,
+        timeout: Duration(seconds: _config.timeout),
+        nativeCrashCheck: kIsWeb ? null : AbrovaTraceNativePlugin.lastExitCrashed,
+      );
+      _releaseHealth = health;
+      _lifecycle = _ReleaseHealthLifecycle(health);
+      WidgetsBinding.instance.addObserver(_lifecycle!);
+      await health.start();
+    } catch (e) {
+      AbrovaTraceLogger.warning('Release health not started', e);
+    }
+  }
+
   /// Drain native crash reports left by the previous session.
   ///
   /// On iOS PLCrashReporter writes a `.plcrash` file on crash; the native
@@ -294,7 +331,7 @@ class AbrovaTrace {
   static String? getUserId() => _instance?._userId;
 
   /// Get current session ID
-  static String? getSessionId() => _instance?._sessionId;
+  static String? getSessionId() => _instance?._currentSessionId;
 
   // === Extra Context Methods ===
 
@@ -390,7 +427,7 @@ class AbrovaTrace {
       ...instance._extraContext,
       'breadcrumbs': AbrovaTraceBreadcrumbs.getBreadcrumbsJson(),
       'user_id': instance._userId,
-      'session_id': instance._sessionId,
+      'session_id': instance._currentSessionId,
     };
 
     // Append user-provided extra data if available
@@ -445,7 +482,7 @@ class AbrovaTrace {
     final Map<String, dynamic> enhancedExtra = {
       ...instance._extraContext,
       'user_id': instance._userId,
-      'session_id': instance._sessionId,
+      'session_id': instance._currentSessionId,
     };
 
     if (includeBreadcrumbs) {
@@ -747,6 +784,9 @@ class AbrovaTrace {
   void _setupErrorHandling() {
     // Flutter error handling
     FlutterError.onError = (FlutterErrorDetails details) {
+      // An uncaught error of the app's Dart code crashes the session, as in Crashlytics' fatal Flutter errors; errors
+      // the framework marks silent (an image that failed to load, …) do not.
+      if (!details.silent) unawaited(_releaseHealth?.markCrashed());
       String message = details.exception.toString();
       String stackTrace = details.stack?.toString() ?? '';
 
@@ -834,6 +874,9 @@ class AbrovaTrace {
 
     // Platform-specific error handling
     _platformHandler.setupErrorHandling((error) {
+      // On devices this is an uncaught error of the app's isolate: the session crashed. On the web it is any error of
+      // the page (scripts that are not the app's too), which is not counted as a crash.
+      if (!kIsWeb) unawaited(_releaseHealth?.markCrashed());
       // Override empty/unhelpful messages
       String message = error.message;
       if (message.isEmpty || message == 'Uncaught' || message.trim().isEmpty) {
@@ -1017,6 +1060,10 @@ class AbrovaTrace {
       await AbrovaTraceNativePlugin.close();
     }
 
+    final lifecycle = _instance?._lifecycle;
+    if (lifecycle != null) WidgetsBinding.instance.removeObserver(lifecycle);
+    await _instance?._releaseHealth?.flush();
+
     _instance?._httpClient.close();
     _instance?._platformHandler.dispose();
     _instance = null;
@@ -1118,4 +1165,19 @@ class AbrovaTrace {
 
   /// Get the number of logs currently buffered
   static int get pendingLogCount => instance._logService?.bufferSize ?? 0;
+}
+
+/// Tells release health when the app goes to the background and comes back (a new session after 30 minutes away).
+class _ReleaseHealthLifecycle with WidgetsBindingObserver {
+  _ReleaseHealthLifecycle(this._health);
+  final ReleaseHealth _health;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _health.paused();
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_health.resumed());
+    }
+  }
 }
