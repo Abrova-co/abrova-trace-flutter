@@ -87,5 +87,5 @@ android {
 dependencies {
     // Published AbrovaTrace Android SDK. Transitively pulls androidx.core,
     // okhttp, gson, lifecycle, work, and protobuf-javalite.
-    implementation 'ir.abrova.trace:abrova-trace-android-sdk:0.2.4'
+    implementation 'ir.abrova.trace:abrova-trace-android-sdk:0.3.0'
 }

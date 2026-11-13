@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - 2026-11-14
+
+- Uses native SDKs Android 0.3.0 and iOS 0.3.0. They can report sessions themselves; in a Flutter app the Flutter SDK
+  does it, so each launch is still counted once.
+
 ## 0.3.0 - 2026-11-14
 
 - Release health: the SDK reports one session per app launch (and a new one after 30 minutes in the background), and

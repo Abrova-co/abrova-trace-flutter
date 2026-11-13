@@ -25,7 +25,7 @@ bridge from Dart to the native SDK.
   s.public_header_files = 'Classes/**/*.h'
 
   s.dependency 'Flutter'
-  s.dependency 'AbrovaTrace', '~> 0.2.5'
+  s.dependency 'AbrovaTrace', '~> 0.3.0'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

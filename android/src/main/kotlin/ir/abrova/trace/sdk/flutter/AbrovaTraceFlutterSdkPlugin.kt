@@ -85,7 +85,9 @@ class AbrovaTraceFlutterSdkPlugin : FlutterPlugin, MethodChannel.MethodCallHandl
             maxBreadcrumbs = call.argument<Int>("maxBreadcrumbs") ?: 20,
             enableOfflineStorage = call.argument<Boolean>("enableOfflineStorage") ?: true,
             sampleRate = (call.argument<Double>("sampleRate") ?: 1.0).toFloat(),
-            apiUrl = call.argument<String>("apiUrl") ?: "https://trace.abrova.ir"
+            apiUrl = call.argument<String>("apiUrl") ?: "https://trace.abrova.ir",
+            // The Flutter SDK reports the sessions itself (see release_health.dart): the native SDK must not as well.
+            enableReleaseHealth = false
         )
 
         AbrovaTrace.init(applicationContext, config)

@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "abrova-trace-flutter-sdk", targets: ["abrova_trace_flutter_sdk"])
     ],
     dependencies: [
-        .package(url: "https://center.abrova.ir/abrova/abrova-trace-ios-sdk.git", from: "0.2.5")
+        .package(url: "https://center.abrova.ir/abrova/abrova-trace-ios-sdk.git", from: "0.3.0")
     ],
     targets: [
         .target(

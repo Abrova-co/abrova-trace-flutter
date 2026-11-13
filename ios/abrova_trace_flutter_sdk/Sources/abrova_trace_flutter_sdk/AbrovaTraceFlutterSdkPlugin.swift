@@ -91,7 +91,9 @@ public class AbrovaTraceFlutterSdkPlugin: NSObject, FlutterPlugin {
             httpTimeout: TimeInterval((args["httpTimeoutSeconds"] as? Int) ?? 30),
             enableOfflineStorage: (args["enableOfflineStorage"] as? Bool) ?? true,
             sampleRate: (args["sampleRate"] as? Double) ?? 1.0,
-            apiUrl: (args["apiUrl"] as? String) ?? "https://trace.abrova.ir"
+            apiUrl: (args["apiUrl"] as? String) ?? "https://trace.abrova.ir",
+            // The Flutter SDK reports the sessions itself (see release_health.dart): the native SDK must not as well.
+            enableReleaseHealth: false
         )
 
         AbrovaTrace.shared.initialize(config: config)
